@@ -8,7 +8,7 @@ const contactUser = async (req, res) => {
   }
 
   try {
-   
+
     const defaultClient = SibApiV3Sdk.ApiClient.instance;
     const apiKey = defaultClient.authentications["api-key"];
     apiKey.apiKey = process.env.BREVO_API_KEY;
@@ -37,22 +37,20 @@ const contactUser = async (req, res) => {
       </div>
     `;
 
-    // 🔹 Mail data
     const sendSmtpEmail = {
-      to: [{ email: process.env.MY_EMAIL_CONTACT }], 
+      to: [{ email: process.env.MY_EMAIL_CONTACT }],
       sender: { name: "Portfolio Contact", email: "contact@priyanshudev.site" },
       replyTo: { email },
       subject: `New Contact Form Message: ${subject}`,
       htmlContent,
     };
 
-    // 🔹 Send mail using Brevo API
     const response = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log("✅ Email sent successfully:", response);
+    console.log("Email sent successfully:", response);
 
     res.status(200).json({ message: "Email sent successfully" });
   } catch (err) {
-    console.error("❌ Brevo Mail Error:", err);
+    console.error("Brevo Mail Error:", err);
     res.status(500).json({ error: "Failed to send email" });
   }
 };
