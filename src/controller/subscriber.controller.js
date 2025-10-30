@@ -85,7 +85,7 @@ const sendNewsletter = async (req, res) => {
             sendTo.map(async (email) => {
                 const sendSmtpEmail = {
                     to: [{ email }],
-                    sender: { name: "Your Portfolio", email: "info@priyanshudev.site" },
+                    sender: { name: "Priyanshu Agrawal", email: process.env.MY_EMAIL_SUBSCRIBE },
                     subject,
                     htmlContent: `
             <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa;">
