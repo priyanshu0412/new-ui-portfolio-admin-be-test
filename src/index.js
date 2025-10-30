@@ -59,6 +59,12 @@ app.use("/api/v1/contact", contactRoutes)
 // Subscribe 
 app.use("/api/v1/subscribe", subscribeRoutes)
 
+// Health Check Route
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
+
 
 
 // --------------------- Listing Port ---------------------
