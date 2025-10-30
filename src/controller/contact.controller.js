@@ -22,7 +22,7 @@ const contactUser = async (req, res) => {
 
     transporter.verify((error, success) => {
       if (error) {
-        console.error("SMTP Verify Error:", error);
+        console.error("SMTP Verify Error", error);
       } else {
         console.log("Zoho SMTP Server is ready to send emails!");
       }
