@@ -68,35 +68,58 @@ const crateProject = async (req, res) => {
 // -------------------------- GET ALL PROJECT --------------------------
 const getAllProject = async (req, res) => {
     try {
-        const { category, page = 1, limit = 10, sortBy = "completeDate", sortOrder = "desc", featured } = req.query;
+        const {
+            category,
+            page = 1,
+            limit = 10,
+            sortBy = "completeDate",
+            sortOrder = "desc",
+            featured,
+            search, // new search query
+        } = req.query;
 
-        // Build filter object
+        // -------------------- FILTER BUILDING --------------------
         const filter = {};
+
+        // Filter by category
         if (category) {
             filter.category = category;
         }
+
+        // Filter by featured status
         if (featured === "true") {
             filter.isFeatured = true;
         } else if (featured === "false") {
             filter.isFeatured = false;
         }
 
-        // Build sort object
-        // Prioritize sorting by isFeatured if needed (put featured first)
-        // But if sorting explicitly by completeDate, then use that
+        // Search filter (matches title, category, tags, techUsed, client)
+        if (search) {
+            const searchRegex = new RegExp(search, "i"); // case-insensitive
+            filter.$or = [
+                { title: searchRegex },
+                { category: searchRegex },
+                { tags: searchRegex },
+                { techUsed: searchRegex },
+                { client: searchRegex },
+            ];
+        }
+
+        // -------------------- SORTING --------------------
         let sort = {};
         if (sortBy === "featured") {
-            // Sort featured projects first (descending true > false) then by date
+            // Featured projects first, then by complete date
             sort = { isFeatured: -1, completeDate: sortOrder === "asc" ? 1 : -1 };
         } else if (sortBy === "date") {
             sort["completeDate"] = sortOrder === "asc" ? 1 : -1;
         } else {
-            // Default fallback sort by creation date
+            // Default: latest created projects first
             sort = { createdAt: -1 };
         }
 
-        // Pagination
+        // -------------------- PAGINATION --------------------
         const skip = (parseInt(page) - 1) * parseInt(limit);
+
         const projects = await Project.find(filter)
             .sort(sort)
             .skip(skip)
@@ -105,6 +128,7 @@ const getAllProject = async (req, res) => {
         // Total count for pagination
         const totalCount = await Project.countDocuments(filter);
 
+        // -------------------- RESPONSE --------------------
         res.json({
             page: parseInt(page),
             limit: parseInt(limit),
@@ -113,10 +137,11 @@ const getAllProject = async (req, res) => {
             projects,
         });
     } catch (err) {
-        console.error(err);
+        console.error("Error fetching projects:", err);
         res.status(500).json({ error: "Server error" });
     }
 };
+
 
 
 // -------------------------- GET SPECIFIC PROJECT --------------------------

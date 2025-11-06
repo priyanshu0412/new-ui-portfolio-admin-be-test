@@ -115,22 +115,23 @@ const createBlog = async (req, res) => {
 // ---------------- GET ALL BLOG ----------------
 const getAllBlogs = async (req, res) => {
     try {
-        // 🔹 Query Parameters
+        // -------------------- QUERY PARAMETERS --------------------
         const {
             page = 1,
             limit = 10,
             category,
             isFeatured,
-            sort = "desc"
+            sort = "desc",
+            search, // added search
         } = req.query;
 
-        // 🔹 Build filter
+        // -------------------- FILTER BUILDING --------------------
         const filter = {};
 
-        // ✅ If category name provided
+        // ✅ If category name provided directly (filter by category)
         if (category) {
             const foundCategory = await BlogCategory.findOne({
-                name: { $regex: new RegExp(`^${category}$`, "i") }
+                name: { $regex: new RegExp(`^${category}$`, "i") },
             });
 
             if (!foundCategory) {
@@ -140,7 +141,6 @@ const getAllBlogs = async (req, res) => {
                 });
             }
 
-            // ✅ Use ObjectId for query
             filter.category = foundCategory._id;
         }
 
@@ -149,10 +149,30 @@ const getAllBlogs = async (req, res) => {
             filter.isFeatured = isFeatured === "true";
         }
 
-        // ✅ Pagination setup
+        // ✅ Search filter — searches in title, desc, authorName, tags, and category name
+        if (search) {
+            const searchRegex = new RegExp(search, "i");
+
+            // Find categories whose name matches the search text
+            const matchedCategories = await BlogCategory.find({
+                name: searchRegex,
+            }).select("_id");
+
+            const matchedCategoryIds = matchedCategories.map((cat) => cat._id);
+
+            filter.$or = [
+                { title: searchRegex },
+                { desc: searchRegex },
+                { authorName: searchRegex },
+                { tags: searchRegex },
+                { category: { $in: matchedCategoryIds } }, // category name match
+            ];
+        }
+
+        // -------------------- PAGINATION SETUP --------------------
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        // ✅ Fetch blogs
+        // -------------------- FETCH BLOGS --------------------
         const blogs = await Blog.find(filter)
             .populate("category")
             .populate("relatedBlogs")
@@ -162,6 +182,7 @@ const getAllBlogs = async (req, res) => {
 
         const totalBlogs = await Blog.countDocuments(filter);
 
+        // -------------------- EMPTY RESULT --------------------
         if (!blogs || blogs.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -169,6 +190,7 @@ const getAllBlogs = async (req, res) => {
             });
         }
 
+        // -------------------- SUCCESS RESPONSE --------------------
         res.status(200).json({
             success: true,
             count: blogs.length,
