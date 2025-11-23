@@ -14,6 +14,7 @@ const projectRoutes = require("./routes/project.routes")
 const footerContentRoutes = require("./routes/footerContent.routes")
 const contactRoutes = require("./routes/contact.routes")
 const subscribeRoutes = require("./routes/subscriber.routes")
+const resumeRoutes = require("./routes/resume.routes")
 
 // --------------------- Body Parsing & Logs & CORS ---------------------
 app.use(express.json())
@@ -21,8 +22,8 @@ app.use(express.urlencoded({ extended: true }))
 app.use(bodyParser.json())
 app.use(morgan("dev"))
 app.use(cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTION"]
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTION"]
 }))
 
 
@@ -59,17 +60,18 @@ app.use("/api/v1/contact", contactRoutes)
 // Subscribe 
 app.use("/api/v1/subscribe", subscribeRoutes)
 
+// Resume 
+app.use("/api/v1/resume", resumeRoutes)
+
 // Health Check Route
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
 
-
-
 // --------------------- Listing Port ---------------------
 const PORT = process.env.PORT || 8000;
 
 app.listen(PORT, () => {
-    console.log(`Server Started on localhost:${PORT}`)
+  console.log(`Server Started on localhost:${PORT}`)
 })
