@@ -22,7 +22,7 @@ const authMiddleware = async (req, res, next) => {
         }
 
         // Optional: check email specifically (for portfolio admin)
-        if (user.email !== "priyanshu_agrawal@portfolio.com") {
+        if (user.email !== process.env.DBSEEDUSERID) {
             return res.status(403).json({ message: "You are not authorized" });
         }
 
