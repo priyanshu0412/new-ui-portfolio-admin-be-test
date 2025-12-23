@@ -51,13 +51,6 @@ const getAllFooterContent = async (req, res) => {
     try {
         const allFooters = await FooterContent.find();
 
-        if (!allFooters || allFooters.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No footer content found."
-            });
-        }
-
         return res.status(200).json({
             success: true,
             count: allFooters.length,
@@ -77,7 +70,6 @@ const getAllFooterContent = async (req, res) => {
 const getSpecificFooterContent = async (req, res) => {
     try {
         const { id } = req.params;
-
         const footer = await FooterContent.findById(id);
 
         if (!footer) {

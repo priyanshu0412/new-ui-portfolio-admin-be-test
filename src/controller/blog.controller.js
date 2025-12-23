@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Blog = require("../models/blog.model");
 const BlogCategory = require("../models/blogCategory.model");
 const slugify = require("slugify");
@@ -21,72 +22,89 @@ const createBlog = async (req, res) => {
             authorPortfolioLink,
             authorOtherProfileLink,
             isFeatured,
-            date
+            date,
         } = req.body;
 
-        // 🔹 Basic validation
+        // ---------------- REQUIRED VALIDATION ----------------
         if (!title || !desc || !authorName) {
             return res.status(400).json({
-                message: "Title, description, and author name are required.",
+                message: "Title, description and author name are required.",
             });
         }
 
-        // 🔹 Generate slug from title
+        // ---------------- SLUG ----------------
         const slug = slugify(title, { lower: true, strict: true });
 
-        // 🔹 Check if blog with same slug exists
         const existingBlog = await Blog.findOne({ slug });
         if (existingBlog) {
-            return res.status(400).json({ message: "A blog with this title already exists." });
+            return res.status(400).json({
+                message: "A blog with this title already exists.",
+            });
         }
 
-        // 🔹 Handle relatedBlogs (optional)
-        if (relatedBlogs && relatedBlogs.length > 0) {
-            if (typeof relatedBlogs === "string") {
-                relatedBlogs = relatedBlogs.split(",").map(id => id.trim());
-            } else if (Array.isArray(relatedBlogs)) {
-                relatedBlogs = relatedBlogs.map(id => id.trim());
+        // ---------------- TAGS (JSON SAFE) ----------------
+        let parsedTags = [];
+
+        if (tags) {
+            try {
+                parsedTags = Array.isArray(tags)
+                    ? tags
+                    : JSON.parse(tags);
+            } catch (err) {
+                parsedTags = tags
+                    .split(",")
+                    .map(t => t.trim())
+                    .filter(Boolean);
             }
-        } else {
-            relatedBlogs = [];
         }
 
-        // 🔹 Handle tags (convert string → array)
-        if (tags && typeof tags === "string") {
-            tags = tags.split(",").map(tag => tag.trim());
-        } else if (!tags) {
-            tags = [];
+        // ---------------- RELATED BLOGS (OPTIONAL + SAFE) ----------------
+        let parsedRelatedBlogs = [];
+
+        if (relatedBlogs) {
+            // FormData relatedBlogs[] → array
+            if (Array.isArray(relatedBlogs)) {
+                parsedRelatedBlogs = relatedBlogs;
+            } else {
+                parsedRelatedBlogs = [relatedBlogs];
+            }
         }
 
-        // 🔹 Ensure category is always an array
+        parsedRelatedBlogs = parsedRelatedBlogs
+            .map(id => id?.toString().trim())
+            .filter(id => mongoose.Types.ObjectId.isValid(id));
+
+        // ---------------- CATEGORY ----------------
         if (category && !Array.isArray(category)) {
             category = [category];
         }
 
-        // 🔹 Validate category IDs (optional)
         if (category && category.length > 0) {
-            const categoryChecks = await Promise.all(
+            const validCategories = await Promise.all(
                 category.map(async (catId) => {
+                    if (!mongoose.Types.ObjectId.isValid(catId)) return false;
                     const cat = await BlogCategory.findById(catId);
-                    return cat ? true : false;
+                    return !!cat;
                 })
             );
 
-            if (categoryChecks.includes(false)) {
-                return res.status(400).json({ message: "One or more categories are invalid." });
+            if (validCategories.includes(false)) {
+                return res.status(400).json({
+                    message: "One or more categories are invalid.",
+                });
             }
         }
 
-        // 🔹 Create new blog
+        // ---------------- CREATE BLOG ----------------
         const newBlog = new Blog({
             title,
             desc,
             authorName,
             readTime,
             category,
-            tags,
+            tags: parsedTags,
             shareLink,
-            relatedBlogs,
+            relatedBlogs: parsedRelatedBlogs,
             content,
             authorDesc,
             authorGithubLink,
@@ -95,19 +113,24 @@ const createBlog = async (req, res) => {
             slug,
             isFeatured,
             thumbnailImg: req.file?.path,
-            date
+            date,
         });
 
         await newBlog.save();
 
-        res.status(201).json({
+        return res.status(201).json({
+            success: true,
             message: "Blog created successfully.",
             blog: newBlog,
         });
 
     } catch (error) {
-        console.error("Error creating blog:", error);
-        res.status(500).json({ message: "Failed to create blog.", error });
+        console.error("Create blog error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to create blog.",
+            error,
+        });
     }
 };
 
@@ -181,14 +204,6 @@ const getAllBlogs = async (req, res) => {
             .limit(parseInt(limit));
 
         const totalBlogs = await Blog.countDocuments(filter);
-
-        // -------------------- EMPTY RESULT --------------------
-        if (!blogs || blogs.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No blogs found",
-            });
-        }
 
         // -------------------- SUCCESS RESPONSE --------------------
         res.status(200).json({
@@ -274,6 +289,7 @@ const getSingleBlog = async (req, res) => {
 const updateBlog = async (req, res) => {
     try {
         const { id } = req.params;
+
         let {
             title,
             desc,
@@ -289,82 +305,95 @@ const updateBlog = async (req, res) => {
             authorPortfolioLink,
             authorOtherProfileLink,
             isFeatured,
+            date,
         } = req.body;
 
-        // 🔹 Check if blog exists
+        // ---------------- BLOG EXIST CHECK ----------------
         const existingBlog = await Blog.findById(id);
         if (!existingBlog) {
             return res.status(404).json({ message: "Blog not found." });
         }
 
-        // 🔹 Validate required fields
+        // ---------------- REQUIRED FIELDS ----------------
         if (!title || !desc || !authorName) {
             return res.status(400).json({
                 message: "Title, description, and author name are required.",
             });
         }
 
-        // 🔹 Generate slug if title changed
+        // ---------------- SLUG ----------------
         let slug = existingBlog.slug;
-        if (title && title !== existingBlog.title) {
+        if (title !== existingBlog.title) {
             slug = slugify(title, { lower: true, strict: true });
-            const duplicateSlug = await Blog.findOne({ slug });
-            if (duplicateSlug && duplicateSlug._id.toString() !== id) {
+
+            const duplicate = await Blog.findOne({ slug });
+            if (duplicate && duplicate._id.toString() !== id) {
                 return res.status(400).json({
                     message: "A blog with this title already exists.",
                 });
             }
         }
 
-        // 🔹 Handle relatedBlogs (convert string → array)
-        if (relatedBlogs && relatedBlogs.length > 0) {
-            if (typeof relatedBlogs === "string") {
-                relatedBlogs = relatedBlogs.split(",").map((id) => id.trim());
-            } else if (Array.isArray(relatedBlogs)) {
-                relatedBlogs = relatedBlogs.map((id) => id.trim());
+        // ---------------- TAGS (SAFE) ----------------
+        let parsedTags = existingBlog.tags;
+
+        if (tags) {
+            try {
+                parsedTags = Array.isArray(tags) ? tags : JSON.parse(tags);
+            } catch {
+                parsedTags = tags
+                    .split(",")
+                    .map(t => t.trim())
+                    .filter(Boolean);
             }
-        } else {
-            relatedBlogs = [];
         }
 
-        // 🔹 Handle tags (convert string → array)
-        if (tags && typeof tags === "string") {
-            tags = tags.split(",").map((tag) => tag.trim());
-        } else if (!tags) {
-            tags = [];
+        // ---------------- RELATED BLOGS (OPTIONAL + SAFE) ----------------
+        let parsedRelatedBlogs = existingBlog.relatedBlogs;
+
+        if (relatedBlogs) {
+            if (Array.isArray(relatedBlogs)) {
+                parsedRelatedBlogs = relatedBlogs;
+            } else {
+                parsedRelatedBlogs = [relatedBlogs];
+            }
+
+            parsedRelatedBlogs = parsedRelatedBlogs
+                .map(id => id?.toString().trim())
+                .filter(id => mongoose.Types.ObjectId.isValid(id));
         }
 
-        // 🔹 Ensure category is always an array
+        // ---------------- CATEGORY ----------------
         if (category && !Array.isArray(category)) {
             category = [category];
         }
 
-        // 🔹 Optional: Validate category IDs
         if (category && category.length > 0) {
-            const categoryChecks = await Promise.all(
+            const validCategories = await Promise.all(
                 category.map(async (catId) => {
+                    if (!mongoose.Types.ObjectId.isValid(catId)) return false;
                     const cat = await BlogCategory.findById(catId);
                     return !!cat;
                 })
             );
 
-            if (categoryChecks.includes(false)) {
-                return res
-                    .status(400)
-                    .json({ message: "One or more categories are invalid." });
+            if (validCategories.includes(false)) {
+                return res.status(400).json({
+                    message: "One or more categories are invalid.",
+                });
             }
         }
 
-        // 🔹 Prepare update object
+        // ---------------- UPDATE OBJECT ----------------
         const updateData = {
             title,
             desc,
             authorName,
             readTime,
             category,
-            tags,
+            tags: parsedTags,
             shareLink,
-            relatedBlogs,
+            relatedBlogs: parsedRelatedBlogs,
             content,
             authorDesc,
             authorGithubLink,
@@ -372,32 +401,37 @@ const updateBlog = async (req, res) => {
             authorOtherProfileLink,
             isFeatured,
             slug,
+            date,
         };
 
-        // 🔹 If new thumbnail uploaded
+        // ---------------- THUMBNAIL ----------------
         if (req.file) {
             updateData.thumbnailImg = req.file.path;
         }
 
-        // 🔹 Update the blog
+        // ---------------- UPDATE ----------------
         const updatedBlog = await Blog.findByIdAndUpdate(
             id,
             { $set: updateData },
             { new: true, runValidators: true }
         );
 
-        res.status(200).json({
+        return res.status(200).json({
+            success: true,
             message: "Blog updated successfully.",
             blog: updatedBlog,
         });
+
     } catch (error) {
-        console.error("Error updating blog:", error);
-        res.status(500).json({
+        console.error("Update blog error:", error);
+        return res.status(500).json({
+            success: false,
             message: "Failed to update blog.",
             error: error.message,
         });
     }
 };
+
 
 
 // ---------------- DELETE BLOG ----------------

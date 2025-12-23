@@ -5,6 +5,8 @@ const bodyParser = require("body-parser")
 const morgan = require("morgan")
 const cors = require("cors")
 const DBConnect = require("./db")
+const cookieParser = require("cookie-parser");
+const dashboardRoutes = require("./routes/dashboard.routes")
 const userRoutes = require("./routes/user.routes")
 const expRoutes = require("./routes/exp.routes")
 const skillsRoutes = require("./routes/skill.routes")
@@ -20,11 +22,14 @@ const resumeRoutes = require("./routes/resume.routes")
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(bodyParser.json())
+app.use(cookieParser());
 app.use(morgan("dev"))
 app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTION"]
-}))
+  origin: ["http://localhost:3000", "http://localhost:3001", "https://priyanshudev.site", "https://admin.priyanshudev.site"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true
+}));
+
 
 
 // --------------------- Connect DB ---------------------
@@ -32,6 +37,9 @@ DBConnect();
 
 
 // --------------------- Routes ---------------------
+
+// User Routes 
+app.use("/api/v1/dashboard", dashboardRoutes)
 
 // User Routes 
 app.use("/api/v1/user", userRoutes)

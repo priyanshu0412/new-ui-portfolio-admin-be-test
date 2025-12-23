@@ -3,20 +3,24 @@ const Subscriber = require("../models/subscriber.model");
 
 const subscribeUser = async (req, res) => {
     try {
-        const { email } = req.body;
+        const { email, addedManually = false } = req.body;
         if (!email) return res.status(400).json({ success: false, message: "Email required" });
 
         let subscriber = await Subscriber.findOne({ email });
+
         if (subscriber) {
             subscriber.subscribed = true;
+            subscriber.addedManually = addedManually;
             await subscriber.save();
+
             return res.status(200).json({
                 success: true,
-                message: "You’re already subscribed!",
+                message: "You're already subscribed!",
             });
         }
 
-        await Subscriber.create({ email });
+        await Subscriber.create({ email, addedManually });
+
         res.status(201).json({
             success: true,
             message: "Subscribed successfully!",
@@ -29,7 +33,6 @@ const subscribeUser = async (req, res) => {
         });
     }
 };
-
 
 const unsubscribeUser = async (req, res) => {
     try {
@@ -47,7 +50,6 @@ const unsubscribeUser = async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 };
-
 
 const sendNewsletter = async (req, res) => {
     try {
@@ -115,7 +117,6 @@ const sendNewsletter = async (req, res) => {
     }
 };
 
-
 const getAllSubscribers = async (req, res) => {
     try {
         const subscribers = await Subscriber.find().sort({ createdAt: -1 });
@@ -125,7 +126,6 @@ const getAllSubscribers = async (req, res) => {
         res.status(500).json({ error: "Failed to fetch subscribers" });
     }
 };
-
 
 module.exports = {
     subscribeUser,

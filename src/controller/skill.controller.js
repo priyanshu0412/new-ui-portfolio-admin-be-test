@@ -74,69 +74,6 @@ const createCategoryWithSkills = async (req, res) => {
     }
 };
 
-
-// ------------------------------ CREATE SPECIFIC SKILL ------------------------------
-const addSkillsToCategory = async (req, res) => {
-    try {
-        const { categoryId } = req.params;
-        const { skills } = req.body;
-
-        const category = await SkillCategory.findById(categoryId).populate("skills");
-        if (!category) {
-            return res.status(404).json({ message: "Category not found" });
-        }
-
-        // 🧠 Check for duplicate skills (within same category)
-        const existingSkillNames = category.skills.map((s) =>
-            s.name.toLowerCase().trim()
-        );
-        const newSkillNames = skills.map((s) => s.name.toLowerCase().trim());
-
-        for (const name of newSkillNames) {
-            if (existingSkillNames.includes(name)) {
-                return res.status(400).json({
-                    message: `Skill "${name}" already exists in this category`,
-                });
-            }
-        }
-
-        // ✅ Create and link new skills
-        const newSkillDocs = [];
-        for (const s of skills) {
-            if (!s.name || !s.level || !s.icon) {
-                return res
-                    .status(400)
-                    .json({ message: "Each skill must have name, level, and icon" });
-            }
-
-            const newSkill = await Skill.create({
-                name: s.name.trim(),
-                level: s.level.trim(),
-                icon: s.icon.trim(),
-                category: categoryId,
-            });
-
-            newSkillDocs.push(newSkill._id);
-        }
-
-        category.skills.push(...newSkillDocs);
-        await category.save();
-
-        const updatedCategory = await SkillCategory.findById(categoryId).populate(
-            "skills"
-        );
-
-        res.status(200).json({
-            message: "New skills added successfully",
-            category: updatedCategory,
-        });
-    } catch (error) {
-        console.error("Add Skills Error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-};
-
-
 // ------------------------------ GET ALL CATEGORY WITH SKILLS ------------------------------
 const getAllCategoryWithSkills = async (req, res) => {
     try {
@@ -170,87 +107,119 @@ const getCategoryWithSkillById = async (req, res) => {
 };
 
 
-// ------------------------------ UPDATE CATEGORY  ------------------------------
-const updateCategoryName = async (req, res) => {
+// ------------------------------ UPDATE WHOLE CATEGORY WITH SKILLS ------------------------------
+const updateWholeCategoryAndSkill = async (req, res) => {
     try {
-        const { categoryId } = req.params;
-        const { category } = req.body;
+        const categoryId = req.params.id;
+        const { category, skills } = req.body;
 
-        if (!category) {
-            return res.status(400).json({ message: "Category name is required" });
+        const existingCategory = await SkillCategory.findById(categoryId);
+        if (!existingCategory) {
+            return res.status(404).json({ message: "Category not found" });
         }
 
-        const skillDoc = await SkillCategory.findById(categoryId).populate("skills");
-        if (!skillDoc) {
-            return res.status(404).json({ message: "Skill category not found" });
+        // CATEGORY NAME CHECK
+        if (category && category !== existingCategory.category) {
+            const categoryExists = await SkillCategory.findOne({ category });
+            if (categoryExists) {
+                return res.status(400).json({ message: "Category name already exists" });
+            }
         }
 
-        // Check duplicate category
-        const existingCategory = await SkillCategory.findOne({
-            category,
-            _id: { $ne: categoryId },
-        });
-        if (existingCategory) {
-            return res
-                .status(400)
-                .json({ message: "Category name already exists" });
+        // VALIDATE
+        if (!Array.isArray(skills)) {
+            return res.status(400).json({ message: "Skills should be an array" });
         }
 
-        skillDoc.category = category;
-        await skillDoc.save();
+        let finalSkillIds = [];
 
-        res.status(200).json({
-            message: "Category name updated successfully",
-            updatedCategory: skillDoc,
-        });
-    } catch (error) {
-        console.error("Update Category Name Error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-};
+        // MAIN LOOP (UPDATE + CREATE)
+        for (let skillData of skills) {
+            const { _id, name, level, icon } = skillData;
 
-// ------------------------------ UPDATE SKILL  ------------------------------
-const updateSkillInCategory = async (req, res) => {
-    try {
-        const { skillId } = req.params;
-        const { name, level, icon } = req.body;
+            // -----------------------------
+            // CASE 1: NEW SKILL (no _id)
+            // -----------------------------
+            if (!_id) {
+                // name unique check
+                const exists = await Skill.findOne({ name });
+                if (exists) {
+                    return res.status(400).json({
+                        message: `Skill name already exists: ${name}`,
+                    });
+                }
 
-        const skill = await Skill.findById(skillId);
-        if (!skill) {
-            return res.status(404).json({ message: "Skill not found" });
-        }
+                const newSkill = await Skill.create({
+                    name,
+                    level,
+                    icon,
+                    category: categoryId,
+                });
 
-        // 🧠 Prevent duplicate skill name inside the same category
-        if (name) {
-            const duplicate = await Skill.findOne({
-                name: { $regex: new RegExp(`^${name}$`, "i") },
-                category: skill.category,
-                _id: { $ne: skillId },
-            });
+                finalSkillIds.push(newSkill._id);
 
-            if (duplicate) {
-                return res
-                    .status(400)
-                    .json({ message: `Skill "${name}" already exists in this category` });
+                await SkillCategory.findByIdAndUpdate(categoryId, {
+                    $addToSet: { skills: newSkill._id },
+                });
+
+                continue; // move to next skill
             }
 
-            skill.name = name.trim();
+            // -----------------------------
+            // CASE 2: UPDATE EXISTING SKILL
+            // -----------------------------
+            const skill = await Skill.findById(_id);
+            if (!skill) {
+                return res.status(400).json({
+                    message: `Skill not found: ${_id}`,
+                });
+            }
+
+            // NAME DUPLICATE CHECK
+            if (name && name !== skill.name) {
+                const nameExists = await Skill.findOne({ name });
+                if (nameExists) {
+                    return res.status(400).json({
+                        message: `Skill name already exists: ${name}`,
+                    });
+                }
+            }
+
+            // UPDATE FIELDS
+            skill.name = name;
+            skill.level = level;
+            skill.icon = icon;
+
+            // CATEGORY FIX
+            if (String(skill.category) !== categoryId) {
+                await SkillCategory.findByIdAndUpdate(skill.category, {
+                    $pull: { skills: skill._id },
+                });
+
+                await SkillCategory.findByIdAndUpdate(categoryId, {
+                    $addToSet: { skills: skill._id },
+                });
+
+                skill.category = categoryId;
+            }
+
+            await skill.save();
+            finalSkillIds.push(skill._id);
         }
 
-        if (level) skill.level = level.trim();
-        if (icon) skill.icon = icon.trim();
+        // UPDATE CATEGORY
+        existingCategory.category = category || existingCategory.category;
+        existingCategory.skills = finalSkillIds;
+        const updatedCategory = await existingCategory.save();
 
-        await skill.save();
-
-        const updatedSkill = await Skill.findById(skillId);
-
-        res.status(200).json({
-            message: "Skill updated successfully",
-            skill: updatedSkill,
+        return res.json({
+            message: "Category + Skills updated successfully",
+            data: updatedCategory,
         });
+
     } catch (error) {
-        console.error("Update Skill Error:", error);
-        res.status(500).json({ message: "Server error" });
+        console.error(error);
+        return res.status(500).json({ message: "Server error" });
     }
 };
 
@@ -277,42 +246,10 @@ const deleteCategoryWithSkills = async (req, res) => {
 };
 
 
-// ------------------------------ DELETE SKILL BY ID  ------------------------------
-const deleteSkillById = async (req, res) => {
-    try {
-        const { skillId } = req.params;
-
-        // Find the skill
-        const skill = await Skill.findById(skillId);
-        if (!skill) return res.status(404).json({ message: "Skill not found" });
-
-        // Remove skill reference from category
-        const category = await SkillCategory.findById(skill.category);
-        if (category) {
-            category.skills = category.skills.filter(
-                (id) => id.toString() !== skillId
-            );
-            await category.save();
-        }
-
-        // Delete the skill
-        await Skill.findByIdAndDelete(skillId);
-
-        res.status(200).json({ message: "Skill deleted successfully" });
-    } catch (error) {
-        console.error("Delete Skill Error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-};
-
-
 module.exports = {
     createCategoryWithSkills,
-    addSkillsToCategory,
     getAllCategoryWithSkills,
     getCategoryWithSkillById,
-    updateCategoryName,
-    updateSkillInCategory,
     deleteCategoryWithSkills,
-    deleteSkillById,
+    updateWholeCategoryAndSkill
 };

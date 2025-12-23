@@ -7,10 +7,15 @@ const uploadResume = async (req, res) => {
             return res.status(400).json({ message: "No file uploaded" });
         }
 
+        if (req.body.isActive === 'true') {
+            await Resume.updateMany({}, { isActive: false });
+        }
+
         const resume = await Resume.create({
-            name: req.file.originalname,     // <-- resume name
-            url: req.file.path,              // cloudinary URL
-            publicId: req.file.filename      // cloudinary public_id
+            name: req.body.name || req.file.originalname,
+            url: req.file.path,
+            publicId: req.file.filename,
+            isActive: req.body.isActive === 'true'
         });
 
         res.json({ success: true, resume });
