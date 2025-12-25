@@ -35,13 +35,11 @@ const loginUser = async (req, res) => {
 
         res.cookie("token", token, {
             httpOnly: true,
-            secure: true,
-            sameSite: "none",
-            domain: ".priyanshudev.site",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             path: "/",
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
-
 
         // Send response
         res.status(200).json({
