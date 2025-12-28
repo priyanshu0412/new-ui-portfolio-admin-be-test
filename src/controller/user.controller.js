@@ -39,6 +39,7 @@ const loginUser = async (req, res) => {
             sameSite: isProduction ? "none" : "lax",
             path: "/",
             maxAge: 7 * 24 * 60 * 60 * 1000,
+            domain: isProduction ? ".priyanshudev.site" : "localhost",
         });
 
         // Send response
