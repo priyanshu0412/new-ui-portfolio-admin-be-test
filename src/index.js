@@ -17,6 +17,8 @@ const footerContentRoutes = require("./routes/footerContent.routes")
 const contactRoutes = require("./routes/contact.routes")
 const subscribeRoutes = require("./routes/subscriber.routes")
 const resumeRoutes = require("./routes/resume.routes")
+const templateCategoryRoutes = require("./routes/templateCategory.routes")
+const templateRoutes = require("./routes/template.routes")
 
 // --------------------- Body Parsing & Logs & CORS ---------------------
 app.use(express.json())
@@ -70,6 +72,12 @@ app.use("/api/v1/subscribe", subscribeRoutes)
 
 // Resume 
 app.use("/api/v1/resume", resumeRoutes)
+
+// Template Category
+app.use("/api/v1/templateCategory", templateCategoryRoutes)
+
+// Template
+app.use("/api/v1/template", templateRoutes)
 
 // Health Check Route
 app.get("/health", (req, res) => {
